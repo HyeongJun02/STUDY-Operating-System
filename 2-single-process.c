@@ -25,8 +25,12 @@ int main() {
 	for (int testCase = 0; testCase < REPEAT; testCase++) {
 		task();
 	}
+<<<<<<< HEAD
     printf("[========= sin-pro.c END =========]\n");
 	printf("[Average time after %d repetitions: %f seconds]\n", REPEAT, totalSum / REPEAT);
+=======
+	printf("[Average time after %d repetitions: %f]\n", REPEAT, totalSum / REPEAT);
+>>>>>>> ca70f4454bab707e3edce4fbe7f71d5de3a14ba8
 
 	return 0;
 }
