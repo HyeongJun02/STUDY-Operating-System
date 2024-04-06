@@ -12,7 +12,7 @@ void task() {
 	for (int i = 1; i <= 4; i++) {
 		printf("[%2d]\n", i);
 		for (int j = 1; j <= 100; j++) {
-			printf("%d * %d = %d\n", j, i * 2 + 1, j * (i * 2 + 1));
+			printf("%3d * %3d = %3d\n", j, i * 2 + 1, j * (i * 2 + 1));
 		}
 	}
 	endTime = clock();
