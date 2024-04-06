@@ -5,32 +5,27 @@
 #include <sys/wait.h>
 #include <time.h>
 
-void *func(int mul_value, int start, int end) {
-    printf("[thread start]\n");
-    for(int i=start; i<=end; i++) {
-        printf("%d * %d = %d\n", i, mul_value, i*mul_value);
-    }
-    pthread_exit(NULL);
-    printf("[thread end]\n");
-}
+// 프로세스의 개수
+#define PROCESSCOUNT 10
+#define MULVALUE 7
 
-// process task
-void process_task(int range, int process_num) {
-    pthread_t tid[4];
-    printf("[Process %d start]\n", process_num);
-    // thread 생성
-    for (int i = 0; i <= 4; ++i) {
-        int args[3];
-        args[0] = 7; // 곱할 값 설정
-        args[1] = process_num * range + 1; // 시작 값 설정
-        args[2] = (process_num + 1) * range; // 종료 값 설정
-        if (pthread_create(&tid[i], NULL, func, NULL) != 0) {
-            fprintf(stderr, "thread create error\n");
-            exit(1);
-        }
-        pthread_join(tid[i], NULL);
+// process가 i*MULVALUE 연산을 하기 위한 함수
+void process_task(int start, int end, int process_num) {
+    // printf("Process %d - Start: %d, End: %d\n", process_num, start, end);
+
+    // 각 프로세스에서의 시간도 측정해보기 위해 시간 측정 알고리즘 추가
+    clock_t startTime = clock();
+    // 연산
+    for (int i = start; i <= end; ++i) {
+        printf("%d * %d = %d\n", i, MULVALUE, i * MULVALUE);
     }
-    printf("[Process %d end]\n", process_num);
+    clock_t endTime = clock();
+    double totalTime = (double)(endTime - startTime) / CLOCKS_PER_SEC;
+    // 아래 printf는 시간 측정 시 주석 처리하였습니다.
+    printf("Process PID:%d\n", (int)getppid()); // Process PID Check
+    printf("Process %d end\n", process_num);
+    // printf("Process %d Elapsed Time: %f seconds\n", process_num, totalTime);
+    // printf("---------------------------------------------\n");
 }
 
 int main() {
@@ -50,16 +45,15 @@ int main() {
 
         // pid: 프로세스 ID 저장
         pid_t pid;
-
         // start: 연산할 값의 시작 값
         // end: 연산할 값의 마지막 값 (+ 1)
         // range: 각 프로세스의 처리 범위
         int start, end, range, i;
 
-        range = 1000 / 8;
+        range = 1000 / PROCESSCOUNT;
 
         // 프로세스의 개수만큼 반복
-        for (i = 0; i < 8; ++i) {
+        for (i = 0; i < PROCESSCOUNT; ++i) {
             start = i * range + 1;
             end = (i + 1) * range;
             
@@ -78,7 +72,7 @@ int main() {
         }
 
         // 자식 프로세스 종료 대기
-        for (i = 0; i < 8; ++i) {
+        for (i = 0; i < PROCESSCOUNT; ++i) {
             wait(NULL);
         }
 
@@ -90,7 +84,7 @@ int main() {
     }
 
     // 평균 시간 계산 후 출력
-    printf("[Average time after %d repetitions: %f]\n", repeat, totalSum / repeat);
+    printf("[Average time after %d repetitions: %f]", repeat, totalSum / repeat);
 
     return 0;
 }
