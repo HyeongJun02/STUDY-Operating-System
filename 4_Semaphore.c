@@ -17,7 +17,7 @@ typedef struct {
     int thread_id;
 } args_t;
 
-void* func(void* args) {
+void* semaphore_func(void* args) {
     args_t* thread_args = (args_t*)args;
     int start = thread_args->start;
     int end = thread_args->end;
@@ -40,29 +40,29 @@ int main() {
         n[i] = i;
     }
 
-    // 세마포 초기값 설정 (1)
+    // 세마포 초기값
     sem_init(&sem, 0, 1);
 
     pthread_t threads[THREAD_COUNT];
     args_t thread_args[THREAD_COUNT];
 
-    // 각 스레드의 범위 설정
+    // thread 범위
     int step = RANGE / THREAD_COUNT;
     for (int i = 0; i < THREAD_COUNT; i++) {
         thread_args[i].start = i * step + 1;
         thread_args[i].end = (i + 1) * step;
         thread_args[i].thread_id = i;
 
-        // 스레드 생성
-        pthread_create(&threads[i], NULL, func, &thread_args[i]);
+        // thread create
+        pthread_create(&threads[i], NULL, semaphore_func, &thread_args[i]);
     }
 
-    // 스레드 종료 대기
+    // wait to end
     for (int i = 0; i < THREAD_COUNT; i++) {
         pthread_join(threads[i], NULL);
     }
 
-    // 세마포 파괴
+    // 세마포 파괴!!
     sem_destroy(&sem);
 
     printf("Total count: %d\n", cnt);
