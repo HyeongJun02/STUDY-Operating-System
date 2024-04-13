@@ -13,8 +13,12 @@ typedef struct {
 } args_t;
 
 void peterson_critical_section_enter(int thread_id) {
+    // thread 크리티컬 섹션 진입 시도
     flag[thread_id] = 1;
+    // 현재 thread가 진입을 시도하므로, 상대 thread의 차례로 turn을 설정
+    // 너가 먼저 들어가
     turn = 1 - thread_id;
+    // 상대 thread가 진입 시도 & 상대가 크리티컬 섹션에 진입할 차례인 경우 -> 대기
     while (flag[1 - thread_id] && turn == 1 - thread_id) {}
 }
 
@@ -36,6 +40,7 @@ void* peterson_func(void* args) {
         // 피터슨 알고리즘 크리티컬 섹션 퇴장
         peterson_critical_section_exit(thread_id);
     }
+    printf("=== thread[%2d] algorithm end ===\n", thread_id);
 
     return NULL;
 }

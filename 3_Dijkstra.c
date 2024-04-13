@@ -7,10 +7,10 @@
 // thread flag
 enum state { IDLE = 0, WANT_IN, IN_CS };
 
-int flag[N] = {IDLE}; // 각 스레드의 플래그 상태를 저장하는 배열
-int turn = 0; // 턴을 나타내는 변수
-int n[101]; // 1부터 100까지의 숫자를 저장하는 배열
-int cnt = 0; // 출력된 수의 카운트
+int flag[N] = {IDLE};
+int turn = 0;
+int n[101];
+int cnt = 0;
 
 typedef struct {
     int start;
@@ -19,7 +19,6 @@ typedef struct {
 } args_t;
 
 void dijkstra_critical_section_enter(int thread_id) {
-    // repeat 단계에서 loop 사용
     int j;
     do {
         // 임계 영역 진입 시도 1단계
@@ -33,16 +32,19 @@ void dijkstra_critical_section_enter(int thread_id) {
         // 임계 영역 진입 시도 2단계
         flag[thread_id] = IN_CS;
         j = 0;
+        // 자신 이외에 in-CS 영역이 있는지 확인
         while (j < N && (j == thread_id || flag[j] != IN_CS)) {
             j++;
         }
-    } while (j < N); // 다른 스레드가 모두 IN_CS가 아니면 임계 영역 진입
+    } while (j < N);
+    // 없으면 내가 크리티컬 섹션에 들어가기
 }
 
 void dijkstra_critical_section_exit(int thread_id) {
-    // 임계 영역 종료
-    flag[thread_id] = IDLE; // 플래그 상태를 IDLE로 설정
-    turn = (turn + 1) % N; // 다음 턴으로 이동
+    // flag를 IDLE로 설정
+    flag[thread_id] = IDLE;
+    // 다음 턴으로
+    turn = (turn + 1) % N;
 }
 
 void* dijkstra_func(void* args) {
@@ -52,10 +54,10 @@ void* dijkstra_func(void* args) {
     int thread_id = thread_args->thread_id;
 
     for (int iter = start; iter <= end; iter++) {
-        dijkstra_critical_section_enter(thread_id); // 임계 영역 진입
+        dijkstra_critical_section_enter(thread_id); // Dijkstra 임계 영역 진입
         printf("Thread[%d]: %3d * 3 = %3d\n", thread_id, n[iter], n[iter] * 3);
         cnt++;
-        dijkstra_critical_section_exit(thread_id); // 임계 영역 종료
+        dijkstra_critical_section_exit(thread_id); // Dijkstra 임계 영역 종료
     }
     printf("=== thread[%2d] algorithm end ===\n", thread_id);
 

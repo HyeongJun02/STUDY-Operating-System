@@ -2,14 +2,14 @@
 #include <pthread.h>
 #include <semaphore.h>
 
-#define RANGE 100 // 숫자 범위
-#define THREAD_COUNT 4 // 스레드 수
+#define RANGE 100
+#define THREAD_COUNT 4
 
-// 세마포 객체 선언 및 초기화
+// 세마포 객체
 sem_t sem;
 
-int n[101]; // 1부터 100까지의 숫자를 저장하는 배열
-int cnt = 0; // 출력된 수의 카운트
+int n[101];
+int cnt = 0;
 
 typedef struct {
     int start;
@@ -31,6 +31,7 @@ void* semaphore_func(void* args) {
         // 크리티컬 섹션 종료 후 세마포 인카운트
         sem_post(&sem);
     }
+    printf("=== thread[%2d] algorithm end ===\n", thread_id);
 
     return NULL;
 }

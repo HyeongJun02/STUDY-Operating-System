@@ -1,10 +1,10 @@
 #include <stdio.h>
 #include <pthread.h>
 
-int flag[2] = {0, 0};
-int turn = 0;
-int n[101];
-int cnt = 0;
+int flag[2] = {0, 0}; // 각 스레드의 플래그 상태를 저장하는 배열
+int turn = 0; // 턴을 나타내는 변수
+int n[101]; // 1부터 100까지의 숫자를 저장하는 배열
+int cnt = 0; // 출력된 수의 카운트
 
 typedef struct {
     int start;
@@ -49,6 +49,7 @@ void* dekker_func(void* args) {
         // 데커 알고리즘 크리티컬 영역 퇴장
         dekker_critical_section_exit(thread_id);
     }
+    printf("=== thread[%2d] algorithm end ===\n", thread_id);
 
     return NULL;
 }
