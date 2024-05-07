@@ -18,10 +18,6 @@ int total_time = 0;                         // 전체 시간
 int next_processing_number[THREAD_COUNT] = { 1, 1, 1, 1, 1 };   // 다음으로 실행할 시간
 int previous_time[THREAD_COUNT];                                // 이전까지 실행한 시간
 
-bool flag[THREAD_COUNT] = { true, false, false, false, false };
-
-int now = 0;
-
 typedef struct Process {
     int id;                 // Process ID
     int multiplier;         // n X multiplier
@@ -98,23 +94,14 @@ void* processThread(void* arg) {
     Process* process = dequeue(q);
 
     pthread_mutex_lock(&q->lock); // lock
-    now = process->id - 1;
     sprintf(gantt_chart + strlen(gantt_chart), "P%d (%d-", process->id, total_time);
 
     int start_time = total_time;
     previous_time[process->id - 1] = next_processing_number[process->id - 1] - 1;
     for (int i = next_processing_number[process->id - 1]; i <= process->running_time; i++) {
-        // printf("%d\n", i);
-        // Preemptive
-        if (!flag[process->id - 1]) {
-            sprintf(gantt_chart + strlen(gantt_chart), "%d)\n", total_time);
-            pthread_mutex_unlock(&q->lock); // unlock
-            break;
-        }
-        // usleep(10000); // 0.01 second delay
-        printf("[TIME: %d] P%d: %d X %d = %d\n", total_time, process->id, i, process->multiplier, i * process->multiplier);
-        total_time++;
         usleep(10000); // 0.01 second delay
+        printf("P%d: %d X %d = %d\n", process->id, i, process->multiplier, i * process->multiplier);
+        total_time++;
         // printf("total_time : %d\n", total_time);
         next_processing_number[process->id - 1] = i + 1;
     }
@@ -146,14 +133,7 @@ int main() {
     pthread_t threads[THREAD_COUNT];
     for (int i = 0; i < THREAD_COUNT; i++) {
         while (total_time != fixed_starting_time[i]);
-        printf("[TIME: %d] P%d is arrived\n", total_time, i + 1);
-        // Preemptive
-        if (fixed_running_time[i] < fixed_running_time[now]) {
-            printf("[TIME: %d] fixed_running_time[P%d](%d) < fixed_running_time[P%d](%d)\n", total_time, i + 1, fixed_running_time[i], now + 1, fixed_running_time[now]);
-            flag[now] = false;
-            flag[i] = true;
-            printQueue(&q);
-        }
+        printf("[TIME: %d] P%d is in\n", total_time, i + 1);
         pthread_create(&threads[i], NULL, processThread, &q);
     }
 
