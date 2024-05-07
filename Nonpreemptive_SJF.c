@@ -55,9 +55,21 @@ void enqueue(Queue* q, Process* process) {
     pthread_mutex_lock(&q->lock);
     if (q->rear == NULL) {
         q->front = q->rear = process;
-    } else {
-        q->rear->next = process;
-        q->rear = process;
+    }
+    else {
+        Process* current = q->front;
+        // current->next의 running_time이 process의 running_time보다 짧을 경우까지 반복
+        while (current->next != NULL && current->next->running_time < process->running_time) {
+            // current를 현재의 다음으로 설정
+            current = current->next;
+        }
+        process->next = current->next;
+        current->next = process;
+        // 삽입된 process의 다음이 NULL일 경우
+        // (마지막 순번이라면)
+        if (process->next == NULL) {
+            q->rear = process;
+        }
     }
     pthread_cond_signal(&q->not_empty);
     pthread_mutex_unlock(&q->lock);
@@ -103,38 +115,6 @@ void* processThread(void* arg) {
     free(process);
     return NULL;
 }
-
-// void enqueue_sorted(Queue* q, Process* process) {
-//     pthread_mutex_lock(&q->lock);
-
-//     // 큐가 비어 있는 경우 또는 새로운 프로세스가 가장 작은 실행 시간을 갖는 경우
-//     if (q->front == NULL || process->running_time < q->front->running_time) {
-//         process->next = q->front;
-//         q->front = process;
-//         // 큐가 비어 있을 경우 rear도 설정
-//         if (q->rear == NULL) {
-//             q->rear = process;
-//         }
-//     } else {
-//         Process* current = q->front;
-//         // 다음 노드가 NULL이 아니고, 다음 노드의 실행 시간이 새로운 프로세스보다 클 때까지 반복
-//         while (current->next != NULL && current->next->running_time < process->running_time) {
-//             current = current->next;
-//         }
-//         // 새로운 프로세스를 적절한 위치에 삽입
-//         process->next = current->next;
-//         current->next = process;
-//         // 만약 새로운 프로세스가 큐의 마지막에 삽입되었다면 rear를 업데이트
-//         if (process->next == NULL) {
-//             q->rear = process;
-//         }
-//     }
-
-//     // 큐에 새로운 요소가 추가되었음을 대기 중인 쓰레드에 알리기 위해 조건 변수 시그널 보내기
-//     pthread_cond_signal(&q->not_empty);
-
-//     pthread_mutex_unlock(&q->lock);
-// }
 
 int main() {
     Queue q;
