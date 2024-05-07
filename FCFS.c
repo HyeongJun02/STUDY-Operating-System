@@ -5,27 +5,35 @@
 
 #define THREAD_COUNT 5
 
-// 각 프로세스를 표현하는 구조체
+static int fixed_running_time[THREAD_COUNT] = { 10, 28, 6, 4, 14 };
+static int fixed_starting_time[THREAD_COUNT] = { 0, 1, 2, 3, 4 };
+
+int return_time[THREAD_COUNT] = { 0, };     // 반환 시간
+int waiting_time[THREAD_COUNT] = { 0, };    // 대기 시간
+int total_time = 0;                         // 전체 시간
+
+int next_processing_number[THREAD_COUNT] = { 1, 1, 1, 1, 1 };   // 다음으로 실행할 시간
+int previous_time[THREAD_COUNT];                                // 이전까지 실행한 시간
+
 typedef struct Process {
-    int id;             // 프로세스 ID
-    int multiplier;     // 프로세스가 사용할 곱수
-    int running_time;   // Process Run Time
-    struct Process* next; // 다음 프로세스를 가리키는 포인터
+    int id;                 // Process ID
+    int multiplier;         // n X multiplier
+    int running_time;       // Process Run Time
+    struct Process* next;
 } Process;
 
-// 큐를 표현하는 구조체
 typedef struct Queue {
-    Process* front; // 큐의 첫 번째 요소를 가리키는 포인터
-    Process* rear; // 큐의 마지막 요소를 가리키는 포인터
-    pthread_mutex_t lock; // 큐에 대한 뮤텍스
-    pthread_cond_t not_empty; // 큐가 비어있지 않음을 나타내는 조건 변수
+    Process* front;
+    Process* rear;
+    pthread_mutex_t lock;
+    pthread_cond_t not_empty;
 } Queue;
 
-// 큐의 내용을 출력하는 함수
+// print
 void printQueue(Queue* q) {
     pthread_mutex_lock(&q->lock);
     Process* current = q->front;
-    printf("Queue Contents:\n");
+    printf("<Queue>\n");
     while (current != NULL) {
         printf("Process ID: %d, Multiplier: %d, Running Time: %d\n", current->id, current->multiplier, current->running_time);
         current = current->next;
@@ -33,14 +41,13 @@ void printQueue(Queue* q) {
     pthread_mutex_unlock(&q->lock);
 }
 
-// 큐 초기화 함수
+// init
 void initQueue(Queue* q) {
     q->front = q->rear = NULL;
     pthread_mutex_init(&q->lock, NULL);
     pthread_cond_init(&q->not_empty, NULL);
 }
 
-// 큐에 요소 추가 함수
 void enqueue(Queue* q, Process* process) {
     pthread_mutex_lock(&q->lock);
     if (q->rear == NULL) {
@@ -53,7 +60,6 @@ void enqueue(Queue* q, Process* process) {
     pthread_mutex_unlock(&q->lock);
 }
 
-// 큐에서 요소 제거 함수
 Process* dequeue(Queue* q) {
     pthread_mutex_lock(&q->lock);
     while (q->front == NULL) {
@@ -68,50 +74,69 @@ Process* dequeue(Queue* q) {
     return process;
 }
 
-// 프로세스를 처리하는 스레드 함수
 void* processThread(void* arg) {
     Queue* q = (Queue*)arg;
-    Process* process = dequeue(q); // 큐에서 프로세스 가져오기
-    pthread_mutex_lock(&q->lock);
-    for (int i = 1; i <= process->running_time; i++) {
-        usleep(10000); // 0.01 second delay
+    Process* process = dequeue(q);
+
+    pthread_mutex_lock(&q->lock); // lock
+
+    int start_time = total_time;
+    previous_time[process->id - 1] = next_processing_number[process->id - 1] - 1;
+    for (int i = next_processing_number[process->id - 1]; i <= process->running_time; i++) {
+        // usleep(10000); // 0.01 second delay
         printf("P%d: %d X %d = %d\n", process->id, i, process->multiplier, i * process->multiplier);
+        total_time++;
+        // printf("total_time : %d\n", total_time);
+        next_processing_number[process->id - 1] = i + 1;
     }
-    pthread_mutex_unlock(&q->lock);
-    free(process); // 메모리 해제
+    return_time[process->id - 1] = total_time - fixed_starting_time[process->id - 1];
+    // 대기시간 = 마지막 작업 시작 시간(start_time) - 도착 시간(fixed_starting_time) - 이전 실행 시간의 합(previous_time)
+    waiting_time[process->id - 1] = start_time - fixed_starting_time[process->id - 1] - previous_time[process->id - 1];
+
+    pthread_mutex_unlock(&q->lock); // unlock
+
+    free(process);
     return NULL;
 }
 
 int main() {
-    // 큐 초기화
     Queue q;
     initQueue(&q);
 
-    // 각 프로세스 생성 및 큐에 추가
-    for (int i = 1; i <= THREAD_COUNT; i++) {
+    for (int i = 0; i < THREAD_COUNT; i++) {
         Process* process = (Process*)malloc(sizeof(Process));
-        process->id = i;
-        process->multiplier = i;
+        process->id = i + 1;
+        process->multiplier = i + 1;
         process->next = NULL;
-        if (i == 1) process->running_time = 10;
-        else if (i == 2) process->running_time = 28;
-        else if (i == 3) process->running_time = 6;
-        else if (i == 4) process->running_time = 4;
-        else if (i == 5) process->running_time = 14;
+        process->running_time = fixed_running_time[i];
         enqueue(&q, process);
         printQueue(&q);
     }
 
-    // 스레드 생성
     pthread_t threads[THREAD_COUNT];
     for (int i = 0; i < THREAD_COUNT; i++) {
         pthread_create(&threads[i], NULL, processThread, &q);
     }
 
-    // 스레드 종료 대기
     for (int i = 0; i < THREAD_COUNT; i++) {
         pthread_join(threads[i], NULL);
     }
+
+    printf("END\n");
+    printf("-----------------------------------------------------------\n");
+    printf("Process\t|\tReturn Time\t|\tWaiting Time\n");
+    printf("-----------------------------------------------------------\n");
+    double sum_return_time = 0, sum_waiting_time = 0;
+    for (int i = 0; i < THREAD_COUNT; i++) {
+        printf("P%d\t|\t%d\t\t|\t%d\n", i + 1, return_time[i], waiting_time[i]);
+        sum_return_time += return_time[i];
+        sum_waiting_time += waiting_time[i];
+    }
+    printf("-----------------------------------------------------------\n");
+    printf("Result\t|\t평균 반환시간\t|\t평균 대기시간\n");
+    printf("-----------------------------------------------------------\n");
+    printf("-\t|\t%.1lf\t\t|\t%.1lf\n", sum_return_time / THREAD_COUNT, sum_waiting_time / THREAD_COUNT);
+    printf("-----------------------------------------------------------\n");
 
     return 0;
 }
