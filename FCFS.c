@@ -2,8 +2,11 @@
 #include <pthread.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <cstring>
 
 #define THREAD_COUNT 5
+
+char gantt_chart[300];
 
 static int fixed_running_time[THREAD_COUNT] = { 10, 28, 6, 4, 14 };
 static int fixed_starting_time[THREAD_COUNT] = { 0, 1, 2, 3, 4 };
@@ -79,11 +82,12 @@ void* processThread(void* arg) {
     Process* process = dequeue(q);
 
     pthread_mutex_lock(&q->lock); // lock
+    sprintf(gantt_chart + strlen(gantt_chart), "P%d (%d-", process->id, total_time);
 
     int start_time = total_time;
     previous_time[process->id - 1] = next_processing_number[process->id - 1] - 1;
     for (int i = next_processing_number[process->id - 1]; i <= process->running_time; i++) {
-        // usleep(10000); // 0.01 second delay
+        usleep(10000); // 0.01 second delay
         printf("P%d: %d X %d = %d\n", process->id, i, process->multiplier, i * process->multiplier);
         total_time++;
         // printf("total_time : %d\n", total_time);
@@ -93,6 +97,7 @@ void* processThread(void* arg) {
     // 대기시간 = 마지막 작업 시작 시간(start_time) - 도착 시간(fixed_starting_time) - 이전 실행 시간의 합(previous_time)
     waiting_time[process->id - 1] = start_time - fixed_starting_time[process->id - 1] - previous_time[process->id - 1];
 
+    sprintf(gantt_chart + strlen(gantt_chart), "%d)\n", total_time);
     pthread_mutex_unlock(&q->lock); // unlock
 
     free(process);
@@ -115,6 +120,8 @@ int main() {
 
     pthread_t threads[THREAD_COUNT];
     for (int i = 0; i < THREAD_COUNT; i++) {
+        while (total_time != fixed_starting_time[i]);
+        printf("[TIME: %d] P%d is in\n", total_time, i + 1);
         pthread_create(&threads[i], NULL, processThread, &q);
     }
 
@@ -123,7 +130,8 @@ int main() {
     }
 
     printf("END\n");
-    printf("-----------------------------------------------------------\n");
+    printQueue(&q);
+    printf("===========================================================\n");
     printf("Process\t|\tReturn Time\t|\tWaiting Time\n");
     printf("-----------------------------------------------------------\n");
     double sum_return_time = 0, sum_waiting_time = 0;
@@ -132,11 +140,15 @@ int main() {
         sum_return_time += return_time[i];
         sum_waiting_time += waiting_time[i];
     }
-    printf("-----------------------------------------------------------\n");
+    printf("===========================================================\n");
     printf("Result\t|\t평균 반환시간\t|\t평균 대기시간\n");
     printf("-----------------------------------------------------------\n");
     printf("-\t|\t%.1lf\t\t|\t%.1lf\n", sum_return_time / THREAD_COUNT, sum_waiting_time / THREAD_COUNT);
+    printf("===========================================================\n");
+    printf("Gantt Chart\n");
     printf("-----------------------------------------------------------\n");
+    printf("%s", gantt_chart);
+    printf("===========================================================\n");
 
     return 0;
 }
