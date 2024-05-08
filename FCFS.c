@@ -1,3 +1,6 @@
+// 2142851 컴퓨터공학과 김형준
+// FCFS
+
 #include <stdio.h>
 #include <pthread.h>
 #include <stdlib.h>
@@ -36,11 +39,13 @@ typedef struct Queue {
 void printQueue(Queue* q) {
     pthread_mutex_lock(&q->lock);
     Process* current = q->front;
-    printf("<Queue>\n");
+    printf("============================ <Queue> ============================\n");
+    if (current == NULL) printf("|\t\t\tCLEAR\t\t\t\t\t|\n");
     while (current != NULL) {
-        printf("Process ID: %d, Multiplier: %d, Running Time: %d\n", current->id, current->multiplier, current->running_time);
+        printf("|\tProcess ID: %d, Multiplier: %d, Running Time: %d\t\t|\n", current->id, current->multiplier, current->running_time);
         current = current->next;
     }
+    printf("=================================================================\n");
     pthread_mutex_unlock(&q->lock);
 }
 
@@ -88,7 +93,7 @@ void* processThread(void* arg) {
     previous_time[process->id - 1] = next_processing_number[process->id - 1] - 1;
     for (int i = next_processing_number[process->id - 1]; i <= process->running_time; i++) {
         usleep(10000); // 0.01 second delay
-        printf("P%d: %d X %d = %d\n", process->id, i, process->multiplier, i * process->multiplier);
+        printf("[TIME: %2d] P%d: %2d X %2d = %2d\n", total_time, process->id, i, process->multiplier, i * process->multiplier);
         total_time++;
         // printf("total_time : %d\n", total_time);
         next_processing_number[process->id - 1] = i + 1;
@@ -121,7 +126,7 @@ int main() {
     pthread_t threads[THREAD_COUNT];
     for (int i = 0; i < THREAD_COUNT; i++) {
         while (total_time != fixed_starting_time[i]);
-        printf("[TIME: %d] P%d is in\n", total_time, i + 1);
+        printf("[TIME: %2d] P%d is arrived\n", total_time, i + 1);
         pthread_create(&threads[i], NULL, processThread, &q);
     }
 
