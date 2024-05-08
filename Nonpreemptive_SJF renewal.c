@@ -1,5 +1,5 @@
 // 2142851 컴퓨터공학과 김형준
-// Nonpreemptive_SJF
+// Preemptive_SJF
 
 #include <stdio.h>
 #include <pthread.h>
@@ -10,7 +10,6 @@
 #define THREAD_COUNT 5
 
 char gantt_chart[300];
-bool flag[THREAD_COUNT] = { true, false, false, false, false };
 
 static int fixed_running_time[THREAD_COUNT] = { 10, 28, 6, 4, 14 };
 static int fixed_starting_time[THREAD_COUNT] = { 0, 1, 2, 3, 4 };
@@ -21,6 +20,10 @@ int total_time = 0;                         // 전체 시간
 
 int next_processing_number[THREAD_COUNT] = { 1, 1, 1, 1, 1 };   // 다음으로 실행할 시간
 int previous_time[THREAD_COUNT];                                // 이전까지 실행한 시간
+
+bool flag[THREAD_COUNT] = { true, false, false, false, false };
+
+int now = 0;
 
 typedef struct Process {
     int id;                 // Process ID
@@ -36,6 +39,8 @@ typedef struct Queue {
     pthread_mutex_t lock;
     pthread_cond_t not_empty;
 } Queue;
+
+Queue process_q;
 
 // print
 void printQueue(Queue* q) {
@@ -96,78 +101,107 @@ Process* dequeue(Queue* q) {
     return process;
 }
 
-// 큐에서 맨 앞에 있는 요소의 정보를 반환하는 함수
-Process* peek(Queue* q) {
-    pthread_mutex_lock(&q->lock);
-    Process* front = q->front;
-    pthread_mutex_unlock(&q->lock);
-    return front;
-}
+// // new function (dequeue and enqueue)
+// void dequeue_and_enqueue(Queue* q) {
+//     pthread_mutex_lock(&q->lock);
 
+//     if (q->front == NULL) {
+//         pthread_mutex_unlock(&q->lock);
+//         return; // Queue가 비어있으면 아무 작업도 하지 않음
+//     }
+
+//     Process* front_process = q->front;
+//     q->front = q->front->next;
+
+//     // Queue의 끝에 삽입하기 위해 rear를 찾음
+//     if (q->rear == NULL) {
+//         q->rear = front_process;
+//     } else {
+//         q->rear->next = front_process;
+//         q->rear = front_process;
+//     }
+
+//     front_process->next = NULL; // 다음 포인터를 NULL로 설정하여 새로운 Queue의 끝을 표시함
+
+//     pthread_mutex_unlock(&q->lock);
+// }
+
+
+
+bool is_end[THREAD_COUNT] = { false, false, false, false, false };
 int before_id;
 
 void* processThread(void* arg) {
     Queue* q = (Queue*)arg;
-    Process* process = peek(q);
-    
-    pthread_mutex_lock(&q->lock); // lock
-
-    printf("[TIME: %2d] [CREATE] P%d\n", total_time, process->id);
-    // Preemptive
-    if (!flag[process->id - 1]) {
-        printf("[TIME: %2d] [STOP] P%d (dequeue and enqueue)\n", total_time, process->id);
-        dequeue(q);
+    Process* process = dequeue(q);
+    printf("[P%d] dequeue(q)\n", process->id);
+    printQueue(q);
+    // 전부 처리된 process가 아니라면
+    if (!is_end[process->id - 1]) {
         enqueue(q, process);
+        printf("[P%d] enqueue(q)\n", process->id);
         printQueue(q);
-        printf("<gantt_chart>\n%s\n", gantt_chart);
-        pthread_mutex_unlock(&q->lock); // unlock
-        while (!flag[process->id - 1]);
     }
 
-    sprintf(gantt_chart + strlen(gantt_chart), "P%d (%d-", process->id, total_time);
+    // 전부 처리된 process라면
+    if (is_end[process->id - 1]) {
+        printf("[P%d] END ! dequeue(q)\n", process->id);
+        dequeue(q);
+        free(process);
+        return NULL;
+    }
 
-    process->start_time = total_time;
-    previous_time[process->id - 1] = next_processing_number[process->id - 1] - 1;
-    for (int i = next_processing_number[process->id - 1]; i <= process->running_time; i++) {
-        usleep(100000); // 0.01 second delay
-        // Preemptive
-        if (!flag[process->id - 1]) {
-            sprintf(gantt_chart + strlen(gantt_chart), "%d) (wait)\n", total_time);
-            printf("[TIME: %2d] [STOP] P%d (dequeue and enqueue)\n", total_time, process->id);
-            printQueue(q);
-            dequeue(q);
-            enqueue(q, process);
-            printQueue(q);
-            printf("<gantt_chart>\n%s\n", gantt_chart);
-            pthread_mutex_unlock(&q->lock); // unlock
-            while (!flag[process->id - 1]);
-            sprintf(gantt_chart + strlen(gantt_chart), "(continue) P%d (%d-", process->id, total_time);
+    while (1) {
+        if (!flag[process->id - 1]) continue;
+        pthread_mutex_lock(&q->lock); // lock
+        now = process->id - 1;
+        sprintf(gantt_chart + strlen(gantt_chart), "P%d (%d-", process->id, total_time);
+
+        process->start_time = total_time;
+        previous_time[process->id - 1] = next_processing_number[process->id - 1] - 1;
+        for (int i = next_processing_number[process->id - 1]; i <= process->running_time; i++) {
+            // printf("%d\n", i);
+            // Preemptive
+            if (!flag[process->id - 1]) {
+                // sprintf(gantt_chart + strlen(gantt_chart), "%d)\n", total_time);
+                // pthread_mutex_unlock(&q->lock); // unlock
+                before_id = process->id - 1;
+                break;
+            }
+            // usleep(10000); // 0.01 second delay
+            printf("[TIME: %2d] P%d: %2d X %2d = %2d\n", total_time, process->id, i, process->multiplier, i * process->multiplier);
+            total_time++;
+            usleep(10000); // 0.01 second delay
+            // printf("total_time : %d\n", total_time);
+            next_processing_number[process->id - 1] = i + 1;
+
+            // is end?
+            if (i == process->running_time) {
+                is_end[process->id - 1] = true;
+            }
         }
-        usleep(100000); // 0.01 second delay
-        printf("[TIME: %2d] P%d: %2d X %2d = %2d\n", total_time, process->id, i, process->multiplier, i * process->multiplier);
-        total_time++;
-        // printf("total_time : %d\n", total_time);
-        next_processing_number[process->id - 1] = i + 1;
+        sprintf(gantt_chart + strlen(gantt_chart), "%d)\n", total_time);
+        pthread_mutex_unlock(&q->lock); // unlock
+
+        // is end ? break;
+        if (is_end[process->id - 1]) {
+            return_time[process->id - 1] = total_time - fixed_starting_time[process->id - 1];
+            // 대기시간 = 마지막 작업 시작 시간(process->start_time) - 도착 시간(fixed_starting_time) - 이전 실행 시간의 합(previous_time)
+            waiting_time[process->id - 1] = process->start_time - fixed_starting_time[process->id - 1] - previous_time[process->id - 1];
+            printf("[TIME: %2d] P%d: END\n", total_time, process->id);
+            break;
+        }
     }
-    return_time[process->id - 1] = total_time - fixed_starting_time[process->id - 1];
-    // 대기시간 = 마지막 작업 시작 시간(process->start_time) - 도착 시간(fixed_starting_time) - 이전 실행 시간의 합(previous_time)
-    waiting_time[process->id - 1] = process->start_time - fixed_starting_time[process->id - 1] - previous_time[process->id - 1];
 
-    sprintf(gantt_chart + strlen(gantt_chart), "%d) (end)\n", total_time);
-    pthread_mutex_unlock(&q->lock); // unlock
-
-    printf("[P%d] free\n", process->id);
-    printf("<gantt_chart>\n%s\n", gantt_chart);
-    free(process);
+    flag[before_id] = true;
+    printf("[P%d] free and gantt_chart\n%s\n", process->id, gantt_chart);
     dequeue(q);
+    free(process);
     return NULL;
 }
 
-int now = 0;
-
 int main() {
-    Queue q;
-    initQueue(&q);
+    initQueue(&process_q);
 
     for (int i = 0; i < THREAD_COUNT; i++) {
         Process* process = (Process*)malloc(sizeof(Process));
@@ -176,29 +210,23 @@ int main() {
         process->next = NULL;
         process->running_time = fixed_running_time[i];
         process->start_time = 0;
-        enqueue(&q, process);
-        printQueue(&q);
+        enqueue(&process_q, process);
+        printQueue(&process_q);
     }
 
     pthread_t threads[THREAD_COUNT];
     for (int i = 0; i < THREAD_COUNT; i++) {
-        pthread_create(&threads[i], NULL, processThread, &q);
-    }
-
-    for (int i = 0; i < THREAD_COUNT; i++) {
         while (total_time != fixed_starting_time[i]);
-        printf("[TIME: %2d] [ARRIVED] P%d\n", total_time, i + 1);
-
+        printf("[TIME: %2d] P%d is arrived\n", total_time, i + 1);
         // Preemptive
         if (fixed_running_time[i] < fixed_running_time[now]) {
-            printf("[TIME: %2d] [IF] fixed_running_time[P%d](%d) < fixed_running_time[P%d](%d)\n", total_time, i + 1, fixed_running_time[i], now + 1, fixed_running_time[now]);
+            printf("[TIME: %2d] fixed_running_time[P%d](%d) < fixed_running_time[P%d](%d)\n", total_time, i + 1, fixed_running_time[i], now + 1, fixed_running_time[now]);
             flag[now] = false;
             flag[i] = true;
-            printf("[TIME: %2d] [FLAG] now run: P%d, stop run: P%d\n", total_time, i + 1, now + 1);
-            printf("<gantt_chart>\n%s\n", gantt_chart);
             now = i;
-            printQueue(&q);
+            printQueue(&process_q);
         }
+        pthread_create(&threads[i], NULL, processThread, &process_q);
     }
 
     for (int i = 0; i < THREAD_COUNT; i++) {
@@ -206,7 +234,7 @@ int main() {
     }
 
     printf("END\n");
-    printQueue(&q);
+    printQueue(&process_q);
     printf("===========================================================\n");
     printf("Process\t|\tReturn Time\t|\tWaiting Time\n");
     printf("-----------------------------------------------------------\n");
