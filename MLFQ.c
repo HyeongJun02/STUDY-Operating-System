@@ -1,212 +1,185 @@
-// 2142851 컴퓨터공학과 김형준
-// Round-Robin
-
 #include <stdio.h>
-#include <pthread.h>
 #include <stdlib.h>
+#include <string.h>
+#include <stdbool.h>
 #include <unistd.h>
-#include <cstring>
+#include <sys/types.h>
+#include <sys/wait.h>
 
-#define THREAD_COUNT 3
+#define PROCESS_COUNT 3
+#define Q1_TIME 1
+#define Q2_TIME 2
+#define Q3_TIME 4
 
-char gantt_chart[300];
-
-static int fixed_running_time[THREAD_COUNT] = { 30, 20, 10 };
-
-int return_time[THREAD_COUNT] = { 0, };     // 반환 시간
-int waiting_time[THREAD_COUNT] = { 0, };    // 대기 시간
-int total_time = 0;                         // 전체 시간
-
-int next_processing_number[THREAD_COUNT] = { 1, 1, 1 };   // 다음으로 실행할 시간
-int previous_time[THREAD_COUNT];                                // 이전까지 실행한 시간
-
-typedef struct Process {
-    int id;                 // Process ID
-    int multiplier;         // n X multiplier
-    int running_time;       // Process Run Time
-    int queue_number;       // queue_number
-    struct Process* next;
+typedef struct {
+    int id;                 // ID
+    int burst_time;         // 실행 시간
+    int remaining_time;     // 남은 실행 시간
+    int arrival_time;       // 도착 시간
+    int return_time;        // 반환 시간 (종료 - 도착)
+    int waiting_time;       // 대기 시간 (반환 - 실행)
+    int tmp;
 } Process;
 
-typedef struct Queue {
-    Process* front;
-    Process* rear;
-    pthread_mutex_t lock;
-    pthread_cond_t not_empty;
+/* ========================================== Queue Func Start ========================================== */
+typedef struct {
+    Process* queue[PROCESS_COUNT];
+    int front;
+    int rear;
 } Queue;
 
-Queue q1;
-Queue q2;
-Queue q3;
-
-// print
-void printQueue(Queue* q) {
-    pthread_mutex_lock(&q->lock);
-    Process* current = q->front;
-    printf("============================ <Queue> ============================\n");
-    if (current == NULL) printf("|\t\t\tCLEAR\t\t\t\t\t|\n");
-    while (current != NULL) {
-        printf("|\tProcess ID: %d, Multiplier: %d, Running Time: %d\t\t|\n", current->id, current->multiplier, current->running_time);
-        current = current->next;
-    }
-    printf("=================================================================\n");
-    pthread_mutex_unlock(&q->lock);
-}
-
-// init
 void initQueue(Queue* q) {
-    q->front = q->rear = NULL;
-    pthread_mutex_init(&q->lock, NULL);
-    pthread_cond_init(&q->not_empty, NULL);
+    q->front = q->rear = -1;
 }
 
-void enqueue(Queue* q, Process* process) {
-    pthread_mutex_lock(&q->lock);
-    if (q->rear == NULL) {
-        q->front = q->rear = process;
-    } else {
-        q->rear->next = process;
-        q->rear = process;
-    }
-    pthread_cond_signal(&q->not_empty);
-    pthread_mutex_unlock(&q->lock);
+bool isEmpty(Queue* q) {
+    return q->front == -1;
+}
+
+void enqueue(Queue* q, Process* p) {
+    if (q->rear == PROCESS_COUNT - 1) return;
+    if (q->front == -1) q->front = 0;
+    q->queue[++q->rear] = p;
 }
 
 Process* dequeue(Queue* q) {
-    pthread_mutex_lock(&q->lock);
-    while (q->front == NULL) {
-        pthread_cond_wait(&q->not_empty, &q->lock);
-    }
-    Process* process = q->front;
-    q->front = q->front->next;
-    if (q->front == NULL) {
-        q->rear = NULL;
-    }
-    pthread_mutex_unlock(&q->lock);
-    return process;
+    if (isEmpty(q)) return NULL;
+    Process* p = q->queue[q->front];
+    if (q->front >= q->rear) q->front = q->rear = -1;
+    else q->front++;
+    return p;
 }
+/* ========================================== Queue Func End ========================================== */
 
-int run_arrow = 0;
-bool flag[THREAD_COUNT] = { true, false, false };
-bool is_end[THREAD_COUNT] = { false, false, false };
+int tmp1 = 1;
+int tmp2 = 1;
+int tmp3 = 1;
 
-void select_arrow(int id) {
-    // printf("[TIME: %2d] SELECT ARROW FUNCTION START\n", total_time);
-    int num;
-    for (int i = 0; i < THREAD_COUNT; i++) {
-        num = (id + i) % THREAD_COUNT;
-        // printf("[TIME: %2d] i: %d\n", total_time, i);
-        // printf("[TIME: %2d] id: %d\n", total_time, id);
-        // printf("[TIME: %2d] num: %d\n", total_time, num);
-        if (is_end[num]) {
-            continue;
-        }
-        else {
-            break;
-        }
-    }
-    run_arrow = num;
-    // printf("[TIME: %2d] run_arrow: %d\n", total_time, run_arrow);
-    flag[run_arrow] = true;
-}
-
-void* processThread(void* arg) {
-    Queue* t_q = (Queue*)arg;
-    Process* process = dequeue(t_q);
-
-    pthread_mutex_lock(&t_q->lock); // lock
-    sprintf(gantt_chart + strlen(gantt_chart), "P%d (%d-", process->id, total_time);
-
-    int start_time = total_time;
-    previous_time[process->id - 1] = 0;
-
-    int running = 0;
-
-    for (int i = next_processing_number[process->id - 1]; i <= process->running_time; i++) {
-        usleep(10000); // 0.01 second delay
-        printf("[TIME: %2d] P%d: %2d X %2d = %2d\n", total_time, process->id, i, process->multiplier, i * process->multiplier);
-        total_time++;
-        // printf("total_time : %d\n", total_time);
-        next_processing_number[process->id - 1] = i + 1;
-
-        running++;
-        if (running == 1 || i == process->running_time) {
-            flag[process->id - 1] = false;
-            select_arrow(process->id);
-            if (i == process->running_time) {
-                // printf("[TIME: %2d] P%d END\n", total_time, process->id);
-                // printf("[TIME: %2d] select_arrow: %d (P%d)\n", total_time, run_arrow, run_arrow + 1);
-                is_end[process->id - 1] = true;
-                break;
-            }
-            previous_time[process->id - 1] += running;
-            sprintf(gantt_chart + strlen(gantt_chart), "%d)\n", total_time);
-
-            pthread_mutex_unlock(&t_q->lock); // unlock
-
-            while (!flag[process->id - 1]);
-
-            pthread_mutex_lock(&t_q->lock); // lock
-            
-            running = 0;
-            start_time = total_time;
-            sprintf(gantt_chart + strlen(gantt_chart), "P%d (%d-", process->id, total_time);
-        }
-    }
-    return_time[process->id - 1] = total_time;
-    waiting_time[process->id - 1] = start_time - previous_time[process->id - 1];
-
-    sprintf(gantt_chart + strlen(gantt_chart), "%d)\n", total_time);
-    pthread_mutex_unlock(&t_q->lock); // unlock
-
-    free(process);
-    return NULL;
-}
-
-int main() {
+/* ========================================== <MLFQ> Start ========================================== */
+void MLFQ(Process processes[], int n) {
+    Queue q1, q2, q3;
     initQueue(&q1);
-
-    for (int i = 0; i < THREAD_COUNT; i++) {
-        Process* process = (Process*)malloc(sizeof(Process));
-        process->id = i + 1;
-        process->multiplier = i + 1;
-        process->next = NULL;
-        process->running_time = fixed_running_time[i];
-        process->queue_number = 1;
-        enqueue(&q1, process);
-        printQueue(&q1);
+    initQueue(&q2);
+    initQueue(&q3);
+    
+    for (int i = 0; i < n; i++) {
+        enqueue(&q1, &processes[i]);
     }
 
-    pthread_t threads[THREAD_COUNT];
+    int time = 0;
+    char gantt_chart[1000] = "";
+    char tmp_gantt_chart[500] = "";
+    
+    while (!isEmpty(&q1) || !isEmpty(&q2) || !isEmpty(&q3)) {
+        Process* current = NULL;
+        int time_quantum = 0;
 
-    for (int i = 0; i < THREAD_COUNT; i++) {
-        pthread_create(&threads[i], NULL, processThread, &q1);
+        if (!isEmpty(&q1)) {
+            current = dequeue(&q1);
+            time_quantum = Q1_TIME;
+        } else if (!isEmpty(&q2)) {
+            current = dequeue(&q2);
+            time_quantum = Q2_TIME;
+        } else if (!isEmpty(&q3)) {
+            current = dequeue(&q3);
+            time_quantum = Q3_TIME;
+        }
+
+        if (current != NULL) {
+            // if (current->remaining_time > time_quantum) {
+            //     exec_time = time_quantum;
+            // }
+            // else {
+            //     exec_time = current->remaining_time;
+            // }
+            int exec_time = (current->remaining_time > time_quantum) ? time_quantum : current->remaining_time;
+            sprintf(tmp_gantt_chart + strlen(tmp_gantt_chart), "P%d (%d-%d) ", current->id, time, time + exec_time);
+            time += exec_time;
+            current->remaining_time -= exec_time;
+            printf("[TIME: %2d] [P%d] remaining_time: %2d\n", time, current->id, current->remaining_time);
+
+            // fork!!
+            pid_t pid = fork();
+
+            if (pid == 0) {
+                switch (current->id) {
+                    case 1:
+                        printf("[TIME: %2d] P%d: %d x %d = %d\n", time, current->id, current->tmp, current->id, current->tmp * current->id);
+                        current->tmp++;
+                        break;
+                    case 2:
+                        printf("[TIME: %2d] P%d: %d x %d = %d\n", time, current->id, current->tmp, current->id, current->tmp * current->id);
+                        current->tmp++;
+                        break;
+                    case 3:
+                        printf("[TIME: %2d] P%d: %d x %d = %d\n", time, current->id, current->tmp, current->id, current->tmp * current->id);
+                        current->tmp++;
+                        break;
+                }
+                exit(0);
+            } else if (pid > 0) {
+                wait(NULL);
+            }
+            // printf("--------------------------------------------------------------------------\n");
+            // printf("[TIME: %2d] Cycle clear\n", time);
+            // printf("--------------------------------------------------------------------------\n");
+            
+            if (current->remaining_time == 0) {
+                current->return_time = time - current->arrival_time;
+                current->waiting_time = current->return_time - current->burst_time;
+            } else {
+                if (current->remaining_time > 1 && exec_time == 1) {
+                    sprintf(gantt_chart + strlen(gantt_chart), "Q1: %s\n", tmp_gantt_chart);
+                    strcpy(tmp_gantt_chart, "");
+                    enqueue(&q2, current);
+                }
+                else if (current->remaining_time > 2) {
+                    sprintf(gantt_chart + strlen(gantt_chart), "Q2: %s\n", tmp_gantt_chart);
+                    strcpy(tmp_gantt_chart, "");
+                    enqueue(&q3, current);
+                } else if (current->remaining_time > 1) {
+                    sprintf(gantt_chart + strlen(gantt_chart), "Q1: %s\n", tmp_gantt_chart);
+                    strcpy(tmp_gantt_chart, "");
+                    enqueue(&q2, current);
+                } else {
+                    sprintf(gantt_chart + strlen(gantt_chart), "Q3: %s\n", tmp_gantt_chart);
+                    strcpy(tmp_gantt_chart, "");
+                    enqueue(&q1, current);
+                }
+            }
+        }
     }
 
-    for (int i = 0; i < THREAD_COUNT; i++) {
-        pthread_join(threads[i], NULL);
-    }
+    double total_return_time = 0;
+    double total_waiting_time = 0;
 
-    printf("END\n");
-    printQueue(&q1);
     printf("===========================================================\n");
     printf("Process\t|\tReturn Time\t|\tWaiting Time\n");
     printf("-----------------------------------------------------------\n");
-    double sum_return_time = 0, sum_waiting_time = 0;
-    for (int i = 0; i < THREAD_COUNT; i++) {
-        printf("P%d\t|\t%d\t\t|\t%d\n", i + 1, return_time[i], waiting_time[i]);
-        sum_return_time += return_time[i];
-        sum_waiting_time += waiting_time[i];
+    for (int i = 0; i < n; i++) {
+        printf("P%d\t|\t%d\t\t|\t%d\n", processes[i].id, processes[i].return_time, processes[i].waiting_time);
+        total_return_time += processes[i].return_time;
+        total_waiting_time += processes[i].waiting_time;
     }
     printf("===========================================================\n");
     printf("Result\t|\t평균 반환시간\t|\t평균 대기시간\n");
     printf("-----------------------------------------------------------\n");
-    printf("-\t|\t%.1lf\t\t|\t%.1lf\n", sum_return_time / THREAD_COUNT, sum_waiting_time / THREAD_COUNT);
+    printf("-\t|\t%.1lf\t\t|\t%.1lf\n", total_return_time / n, total_waiting_time / n);
     printf("===========================================================\n");
     printf("Gantt Chart\n");
     printf("-----------------------------------------------------------\n");
-    printf("%s", gantt_chart);
+    printf("%s\n", gantt_chart);
     printf("===========================================================\n");
+}
+/* ========================================== <MLFQ> End ========================================== */
 
+int main() {
+    Process processes[PROCESS_COUNT] = {
+        {1, 30, 30, 0, 0, 0, 1},
+        {2, 20, 20, 0, 0, 0, 1},
+        {3, 10, 10, 0, 0, 0, 1}
+    };
+
+    MLFQ(processes, PROCESS_COUNT);
     return 0;
 }

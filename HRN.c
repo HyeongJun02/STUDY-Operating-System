@@ -1,5 +1,5 @@
 // 2142851 컴퓨터공학과 김형준
-// Nonpreemptive_Priority
+// HRN
 
 #include <stdio.h>
 #include <pthread.h>
