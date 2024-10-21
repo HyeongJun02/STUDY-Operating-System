@@ -1,5 +1,5 @@
 // 2142851 컴퓨터공학과 김형준
-// Nonpreemptive_SJF
+// Nonpreemptive_Priority
 
 #include <stdio.h>
 #include <pthread.h>
@@ -14,6 +14,8 @@ char gantt_chart[300];
 static int fixed_running_time[THREAD_COUNT] = { 10, 28, 6, 4, 14 };
 static int fixed_starting_time[THREAD_COUNT] = { 0, 1, 2, 3, 4 };
 
+int priority[THREAD_COUNT] = { 3, 2, 4, 1, 2 };
+
 int return_time[THREAD_COUNT] = { 0, };     // 반환 시간
 int waiting_time[THREAD_COUNT] = { 0, };    // 대기 시간
 int total_time = 0;                         // 전체 시간
@@ -25,6 +27,7 @@ typedef struct Process {
     int id;                 // Process ID
     int multiplier;         // n X multiplier
     int running_time;       // Process Run Time
+    int priority;
     struct Process* next;
 } Process;
 
@@ -63,8 +66,8 @@ void enqueue(Queue* q, Process* process) {
     }
     else {
         Process* current = q->front;
-        // current->next의 running_time이 process의 running_time보다 짧을 경우까지 반복
-        while (current->next != NULL && current->next->running_time < process->running_time) {
+        // sort loop
+        while (current->next != NULL && current->next->priority >= process->priority) {
             // current를 현재의 다음으로 설정
             current = current->next;
         }
@@ -131,13 +134,14 @@ int main() {
         process->multiplier = i + 1;
         process->next = NULL;
         process->running_time = fixed_running_time[i];
+        process->priority = priority[i];
         enqueue(&q, process);
         printQueue(&q);
     }
 
     pthread_t threads[THREAD_COUNT];
     for (int i = 0; i < THREAD_COUNT; i++) {
-        while (total_time != fixed_starting_time[i]);
+        while (total_time < fixed_starting_time[i]);
         printf("[TIME: %2d] P%d is arrived\n", total_time, i + 1);
         pthread_create(&threads[i], NULL, processThread, &q);
     }
@@ -169,3 +173,4 @@ int main() {
 
     return 0;
 }
+
